@@ -22,19 +22,19 @@ function get_server { # ARGS: country_code, server_type, server_protocol
     if [[ -z $countrynr ]]; then
         echo "ERROR: Invalid country code. Available codes:"
         curl --silent "https://api.nordvpn.com/v1/servers/countries" | jq --raw-output '.[] | [.code, .name] |  @tsv'
-        exit
+        exit 1
     fi
     server=`curl --silent "https://api.nordvpn.com/v1/servers/recommendations?filters\[country_id\]=$countrynr&filters\[servers_groups\]\[identifier\]=$2&filters\[servers_technologies\]\[identifier\]=$3&limit=1" | jq --raw-output '.[].hostname'`
     if [[ -z $server ]]; then
         echo "ERROR: No server found for that country and protocol."
-        exit
+        exit 1
     fi
 }
 
 # check if run as root
 if [[ "$EUID" != 0 ]]; then
     echo "ERROR: Must be run as r00t."
-    exit
+    exit 1
 fi
 
 # check dependencies
@@ -42,31 +42,37 @@ dependencies=("openvpn" "sipcalc" "curl" "jq")
 for dep in ${dependencies[@]}; do
     if [[ ! `command -v $dep` ]]; then
         echo "ERROR: dependency '$dep' not installed."
-        exit
+        exit 1
     fi
 done
 
 # check if ovpn path exists
 if [[ ! -d $OVPNPATH ]]; then
     echo "ERROR: Directory '$OVPNPATH' doesn't exist. Download and extract the files (https://downloads.nordcdn.com/configs/archives/servers/ovpn.zip) to $OVPNPATH/."
-    exit
+    exit 1
 fi
 
 # check if ovpn authfile exists
 if [[ ! -f $AUTHFILE ]]; then
     echo "ERROR: Create an OpenVPN auth-user-pass file in $AUTHFILE."
-    exit
+    exit 1
 fi
 
 # check if no arguments provided
 [[ $# == 0 ]] && usage
+
+# check if $IFACENAME is already running
+if [[ $1 != "disconnect" && ! -z `ip a | grep $IFACENAME` ]]; then
+    echo "ERROR: Interface $IFACENAME exists. Please run 'disconnect' first."
+    exit 1
+fi
 
 while [[ $# > 0 ]]; do
     case $1 in
         disconnect)
             if [[ ! -f "$PIDFILE" ]]; then # pidfile doesn't exist
                 echo "ERROR: NordVPN not connected, or not started with '$NAME'. OpenVPN must be killed manually."
-                exit
+                exit 1
             fi
             kill `cat $PIDFILE`
             rm $PIDFILE
@@ -119,7 +125,7 @@ while [[ $# > 0 ]]; do
         route) # route only specific cidr networks
             if [[ ! "$2" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]]; then
                 echo "ERROR: Invalid route string, use CIDR notation."
-                exit
+                exit 1
             fi
             netaddr=`sipcalc $2 | grep -m1 "Network address" | sed 's/.*- //'`
             netmask=`sipcalc $2 | grep -m1 "Network mask" | sed 's/.*- //'`
