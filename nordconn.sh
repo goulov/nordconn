@@ -10,10 +10,11 @@ baseargs="--auth-user-pass $AUTHFILE --writepid $PIDFILE --dev $IFACENAME --dev-
 
 function usage {
     echo "usage:"
-    echo -e "\tnordconn.sh tcp/udp/p2ptcp/p2pudp/doubletcp/doubleudp countrycode [route w.x.y.z/a]*"
+    echo -e "\tnordconn.sh tcp/udp/p2ptcp/p2pudp/doubletcp/doubleudp countrycode [route w.x.y.z/a]* [noroute w.x.y.z/a]*"
     echo -e "\tnordconn.sh disconnect"
     echo -e "\tnordconn.sh help"
-    echo -e "\n\t(route is optional or can be set multiple times. default: 0.0.0.0/0)"
+    echo -e "\n\t(route is optional or can be set multiple times)"
+    echo -e "\n\t(noroute is optional or can be set multiple times)"
     exit
 }
 
@@ -130,6 +131,17 @@ while [[ $# > 0 ]]; do
             netaddr=`sipcalc $2 | grep -m1 "Network address" | sed 's/.*- //'`
             netmask=`sipcalc $2 | grep -m1 "Network mask" | sed 's/.*- //'`
             route="$route --route $netaddr $netmask --route-nopull"
+            shift; shift
+            ;;
+
+        noroute) # don't route specific cidr networks
+            if [[ ! "$2" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]]; then
+                echo "ERROR: Invalid route string, use CIDR notation."
+                exit 1
+            fi
+            netaddr=`sipcalc $2 | grep -m1 "Network address" | sed 's/.*- //'`
+            netmask=`sipcalc $2 | grep -m1 "Network mask" | sed 's/.*- //'`
+            route="$route --route $netaddr $netmask net_gateway"
             shift; shift
             ;;
 
